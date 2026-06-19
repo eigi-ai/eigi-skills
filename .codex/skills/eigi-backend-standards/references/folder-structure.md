@@ -22,7 +22,6 @@ venv/
 .venv/
 __pycache__/
 *.py[cod]
-.pytest_cache/
 .mypy_cache/
 .ruff_cache/
 htmlcov/
@@ -194,17 +193,6 @@ Responsibilities:
 
 Do not use these folders as dumping grounds. Prefer a domain service when behavior belongs to a business capability.
 
-## `tests/`
-
-Use pytest tests close to the behavior being changed.
-
-Responsibilities:
-
-- Cover controller/service/CRUD behavior with mocks for heavy dependencies.
-- Cover route behavior where request validation, auth handling, or status code behavior matters.
-- Stub external SDKs, databases, schedulers, cloud clients, and network calls.
-- Keep tests deterministic and independent of live secrets.
-
 ## Adding a New API Surface
 
 When adding a new backend feature:
@@ -217,4 +205,3 @@ When adding a new backend feature:
 6. Add a route that calls the controller and handles route-level auth/logging/errors.
 7. Register the router in `core/apis/api.py` or the target repo's equivalent API aggregator.
 8. Confirm every new or modified function and method has a docstring.
-9. Add focused tests for success, auth/permission failures, validation, not-found, conflict, and dependency failures.

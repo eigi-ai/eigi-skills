@@ -1,6 +1,6 @@
 ---
 name: eigi-backend-standards
-description: Shared Eigi backend engineering standards for creating, modifying, reviewing, or testing backend code in any Eigi repo. Use for Python/FastAPI-style APIs and services that need consistent route/controller/service/CRUD layering, folder placement, required function docstrings, logging, try/except handling, schemas, models, and pytest coverage. Use Vaani Core as the canonical reference implementation while adapting to the target repo's local structure.
+description: Shared Eigi backend engineering standards for creating, modifying, or reviewing backend code in any Eigi repo. Use for Python/FastAPI-style APIs and services that need consistent route/controller/service/CRUD layering, folder placement, required function docstrings, logging, try/except handling, schemas, and models. Use Vaani Core as the canonical reference implementation while adapting to the target repo's local structure.
 ---
 
 # Eigi Backend Standards
@@ -27,11 +27,11 @@ API route -> controller -> service and/or CRUD -> model/database or external pro
 
 ## API Docstrings
 
-Every new or modified function and method must have a docstring. This includes route handlers, controllers, CRUD methods, services, helpers, private methods, startup/shutdown functions, validators, and test helpers.
+Every new or modified function and method must have a docstring. This includes route handlers, controllers, CRUD methods, services, helpers, private methods, startup/shutdown functions, and validators.
 
-Route handler docstrings should explain what the API does without restating obvious code. Include a one-line summary, a short behavior description, `Args`, `Returns`, and `Raises`. Add an `Example` only when the payload, query string, or behavior is not obvious.
+Docstrings must start with a concise two-line description: first line for purpose, second line for behavior or business rule. If the function has parameters, include `Args` and describe each argument. If it can raise an exception or error, include `Raises` and list the expected error type/status.
 
-Controller, CRUD, service, and helper docstrings can be shorter, but they must still include purpose, key args, return shape, and expected errors or side effects where relevant. Use [references/examples.md](references/examples.md) for concrete docstring examples.
+Include `Returns` when the function returns a value. Add an `Example` only when the payload, query string, or behavior is not obvious. Use [references/examples.md](references/examples.md) for concrete docstring examples.
 
 ## Logging
 
@@ -96,22 +96,6 @@ Services should own provider clients, external calls, background workflows, and 
 
 When creating a backend structure, add or update `.gitignore` even if the repo is not Git-initialized yet. It must exclude environment files, virtualenvs, Python caches, test/build caches, logs, local databases, and editor/OS noise. See [references/folder-structure.md](references/folder-structure.md) for the compact backend template.
 
-## Testing
-
-Add pytest coverage for the behavior you changed:
-
-- Success path.
-- Validation failures.
-- Invalid token or unauthenticated request.
-- Inactive user or permission failure.
-- Ownership failure.
-- Not-found case.
-- Duplicate/conflict case when applicable.
-- Unexpected dependency failure that becomes a route-level 500.
-- External provider failure with mocked clients when services call outside systems.
-
-Mock databases, provider SDKs, schedulers, cloud clients, and network calls. Follow nearby tests for stubs and import setup. Normal tests must not require live secrets or production services.
-
 ## Finish Checklist
 
 - Inspect nearby files and follow local naming and response conventions.
@@ -123,4 +107,3 @@ Mock databases, provider SDKs, schedulers, cloud clients, and network calls. Fol
 - Preserve meaningful domain `HTTPException`s.
 - Add or update `.gitignore` for env files, virtualenvs, caches, logs, and generated artifacts.
 - Register new routers in the app/API aggregator.
-- Add focused tests and run them, or explain why they could not be run.
