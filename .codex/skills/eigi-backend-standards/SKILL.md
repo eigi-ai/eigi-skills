@@ -1,6 +1,6 @@
 ---
-name: eigi-backend-api
-description: Shared Eigi backend standards for creating, modifying, reviewing, or testing backend code in any Eigi repo. Use for Python/FastAPI-style APIs and services that need consistent route/controller/service/CRUD layering, folder placement, API docstrings, logging, try/except handling, schemas, models, and pytest coverage. Use Vaani Core as the canonical reference implementation while adapting to the target repo's local structure.
+name: eigi-backend-standards
+description: Shared Eigi backend engineering standards for creating, modifying, reviewing, or testing backend code in any Eigi repo. Use for Python/FastAPI-style APIs and services that need consistent route/controller/service/CRUD layering, folder placement, required function docstrings, logging, try/except handling, schemas, models, and pytest coverage. Use Vaani Core as the canonical reference implementation while adapting to the target repo's local structure.
 ---
 
 # Eigi Backend Standards
