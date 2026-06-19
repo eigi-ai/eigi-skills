@@ -1,0 +1,120 @@
+---
+name: eigi-backend-api
+description: Shared Eigi backend standards for creating, modifying, reviewing, or testing backend code in any Eigi repo. Use for Python/FastAPI-style APIs and services that need consistent route/controller/service/CRUD layering, folder placement, API docstrings, logging, try/except handling, schemas, models, and pytest coverage. Use Vaani Core as the canonical reference implementation while adapting to the target repo's local structure.
+---
+
+# Eigi Backend Standards
+
+Use this skill to write backend code that follows Eigi conventions. Inspect the target repo first, then apply the closest local pattern. When a repo has no stronger convention, use `agent-360/backend/vaani_core` as the reference implementation.
+
+For detailed folder and file responsibilities, read [references/folder-structure.md](references/folder-structure.md) before adding new backend files or moving code between layers.
+
+For concrete router, controller, CRUD, and service examples based on Vaani Core patterns, read [references/examples.md](references/examples.md) before writing new backend modules.
+
+## Core Flow
+
+Prefer this layering for API work:
+
+```text
+API route -> controller -> service and/or CRUD -> model/database or external provider
+```
+
+- Keep routes thin: HTTP method/path, dependencies, auth token decoding, request parsing, response schema wrapping, and route-level error handling.
+- Put business decisions in controllers: ownership checks, domain validation, orchestration, and response payload assembly.
+- Put database access in CRUD classes: reads, writes, filters, ObjectId conversion, and persistence-specific operations.
+- Put external integrations and reusable workflows in services.
+- Put request/response wire contracts in schemas and storage shape in models.
+
+## API Docstrings
+
+Every new or modified function and method must have a docstring. This includes route handlers, controllers, CRUD methods, services, helpers, private methods, startup/shutdown functions, validators, and test helpers.
+
+Route handler docstrings should explain what the API does without restating obvious code. Include a one-line summary, a short behavior description, `Args`, `Returns`, and `Raises`. Add an `Example` only when the payload, query string, or behavior is not obvious.
+
+Controller, CRUD, service, and helper docstrings can be shorter, but they must still include purpose, key args, return shape, and expected errors or side effects where relevant. Use [references/examples.md](references/examples.md) for concrete docstring examples.
+
+## Logging
+
+Use the repo logger helper when available:
+
+```python
+from core import logger
+
+logging = logger(__name__)
+```
+
+Use these log message patterns consistently:
+
+- Route entry: `logging.info("Calling METHOD /path endpoint")`.
+- Dynamic route entry: `logging.info(f"Calling GET /v1/resources/{resource_id} endpoint")`.
+- Controller/service/CRUD entry: `logging.info("Executing ClassName.method_name")`.
+- Expected blocked state: `logging.warning(...)` for inactive users, invalid ownership, missing records, duplicate names, invalid transitions, or denied access.
+- Route error: `logging.error(f"Error in METHOD /path endpoint: {error}")`.
+- Controller/service/CRUD error: `logging.error(f"Error in ClassName.method_name: {error}")`.
+
+Do not log raw secrets, access tokens, API keys, passwords, private prompts, or full sensitive payloads. Log stable IDs, prefixes, counts, provider names, and state changes when useful.
+
+## Route Error Handling
+
+Wrap route handlers in `try`/`except`. Re-raise `HTTPException` unchanged and convert unknown exceptions to a consistent 500.
+
+Keep route auth checks aligned with nearby code. In Vaani Core-style routes, decode the bearer token, reject missing/invalid users with `401`, reject inactive users with `403`, and delegate ownership/domain checks to the controller.
+
+See [references/examples.md](references/examples.md) for a full router example.
+
+## Controller Error Handling
+
+Controllers should log method entry and make domain failures explicit.
+
+Use controller `warning` logs for expected business rejections. Use `error` logs for unexpected failures. Do not hide useful 400/401/403/404/409 errors behind a generic 500.
+
+See [references/examples.md](references/examples.md) for full controller examples, including duplicate checks, not-found checks, ownership checks, and unexpected error handling.
+
+## CRUD and Service Rules
+
+CRUD classes should be small persistence wrappers:
+
+- Extend the repo base CRUD class when available.
+- Initialize with the model class.
+- Convert string IDs to ObjectId where the repo expects ObjectId storage.
+- Log method entry and persistence failures.
+- Re-raise database errors unless the CRUD method has enough context to return a domain-safe result.
+
+Services should own provider clients, external calls, background workflows, and reusable non-CRUD logic. Services may normalize provider errors when they own the integration contract, but they should not contain route-only auth parsing or HTTP request glue.
+
+## Schema and Model Rules
+
+- Use request schemas for bodies and structured query payloads.
+- Use response schemas when an endpoint returns structured data.
+- Use `Field` constraints and descriptions for validation and OpenAPI clarity.
+- Use enums for constrained status/type values.
+- Keep secret storage hashed or redacted. Return raw secrets only at creation time when the product explicitly requires it.
+- Keep timestamps, defaults, collection names, and storage-only fields in models.
+
+## Testing
+
+Add pytest coverage for the behavior you changed:
+
+- Success path.
+- Validation failures.
+- Invalid token or unauthenticated request.
+- Inactive user or permission failure.
+- Ownership failure.
+- Not-found case.
+- Duplicate/conflict case when applicable.
+- Unexpected dependency failure that becomes a route-level 500.
+- External provider failure with mocked clients when services call outside systems.
+
+Mock databases, provider SDKs, schedulers, cloud clients, and network calls. Follow nearby tests for stubs and import setup. Normal tests must not require live secrets or production services.
+
+## Finish Checklist
+
+- Inspect nearby files and follow local naming and response conventions.
+- Read [references/folder-structure.md](references/folder-structure.md) when adding files or deciding layer placement.
+- Read [references/examples.md](references/examples.md) when creating a new router, controller, CRUD class, or service.
+- Keep routes thin and controllers responsible for domain orchestration.
+- Add docstrings to every new or modified function and method.
+- Add entry, warning, and error logs in the same format as existing backend code.
+- Preserve meaningful domain `HTTPException`s.
+- Register new routers in the app/API aggregator.
+- Add focused tests and run them, or explain why they could not be run.
