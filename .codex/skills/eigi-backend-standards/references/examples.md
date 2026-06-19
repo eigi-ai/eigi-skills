@@ -9,14 +9,12 @@ Use this shape for authenticated FastAPI endpoints. Keep the route thin: parse r
 ```python
 from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi.security import OAuth2PasswordBearer
-from odmantic import AIOEngine
 
 from commons.auth import decodeJWT
 from core import logger
 from core.apis.schemas.requests.resource_request import ResourceCreate
 from core.apis.schemas.responses.resource_response import ResourceResponse
 from core.controllers.resource_controller import ResourceController
-from core.database.database import get_database
 
 resource_router = APIRouter()
 logging = logger(__name__)
@@ -31,7 +29,6 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/auth/login")
 async def create_resource(
     request: ResourceCreate,
     token: str = Depends(oauth2_scheme),
-    db: AIOEngine = Depends(get_database),
 ):
     """
     Create a resource for the authenticated user.
@@ -42,7 +39,6 @@ async def create_resource(
     Args:
         request (ResourceCreate): Resource creation payload.
         token (str): OAuth2 bearer token for authentication.
-        db (AIOEngine): Database session dependency.
 
     Returns:
         ResourceResponse: Created resource details.
@@ -72,7 +68,6 @@ async def create_resource(
             )
 
         response = await ResourceController().create_resource(
-            db=db,
             resource_data=request.model_dump(),
             authenticated_user_details=authenticated_user_details,
         )
@@ -96,7 +91,6 @@ Use this shape for business orchestration. Instantiate the CRUD/services in `__i
 
 ```python
 from fastapi import HTTPException, status
-from odmantic import AIOEngine
 
 from core import logger
 from core.cruds.resource_crud import CRUDResource
@@ -110,7 +104,6 @@ class ResourceController:
 
     async def create_resource(
         self,
-        db: AIOEngine,
         resource_data: dict,
         authenticated_user_details: dict,
     ) -> dict:
@@ -118,7 +111,6 @@ class ResourceController:
         Create a resource for the authenticated user.
 
         Args:
-            db: Database engine.
             resource_data: Resource creation data.
             authenticated_user_details: Authenticated user information.
 
@@ -133,7 +125,6 @@ class ResourceController:
             user_id = authenticated_user_details.get("id")
 
             existing_resource = await self.CRUDResource.get_by_name(
-                db=db,
                 user_id=user_id,
                 name=resource_data.get("name", ""),
             )
@@ -147,7 +138,7 @@ class ResourceController:
                 )
 
             resource_data["user_id"] = user_id
-            resource = await self.CRUDResource.create(db=db, obj_in=resource_data)
+            resource = await self.CRUDResource.create(obj_in=resource_data)
             if not resource:
                 logging.error("Failed to create resource")
                 raise HTTPException(
@@ -155,12 +146,12 @@ class ResourceController:
                     detail="Failed to create resource",
                 )
 
-            logging.info(f"Resource created successfully: {resource.id}")
+            logging.info(f"Resource created successfully: {resource['id']}")
             return {
-                "id": str(resource.id),
-                "name": resource.name,
-                "status": resource.status,
-                "created_at": resource.created_at,
+                "id": str(resource["id"]),
+                "name": resource["name"],
+                "status": resource["status"],
+                "created_at": resource["created_at"],
             }
         except HTTPException:
             raise
@@ -168,14 +159,14 @@ class ResourceController:
             logging.error(f"Error in ResourceController.create_resource: {error}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Internal Server Error: {str(error)}",
+                detail="Internal Server Error",
             )
 ```
 
 Use this pattern for lookup and ownership checks:
 
 ```python
-resource = await self.CRUDResource.get_by_id(db=db, id=resource_id)
+resource = await self.CRUDResource.get_by_id(id=resource_id)
 if not resource:
     logging.warning(f"Resource not found: {resource_id}")
     raise HTTPException(
@@ -183,7 +174,7 @@ if not resource:
         detail="Resource not found",
     )
 
-if str(resource.user_id) != authenticated_user_details.get("id"):
+if str(resource["user_id"]) != authenticated_user_details.get("id"):
     logging.warning(
         f"User {authenticated_user_details.get('id')} cannot access resource {resource_id}"
     )
@@ -195,106 +186,159 @@ if str(resource.user_id) != authenticated_user_details.get("id"):
 
 ## CRUD Example
 
-Use this shape for repository/persistence classes. Keep the class focused on database operations and leave business rules to controllers.
+Use this shape for repository/persistence classes. Keep the class focused on database operations and leave business rules to controllers. The CRUD class should get the database/session helper from `database.py` or the local equivalent instead of requiring route/controller methods to pass `db`.
 
 ```python
-from motor.core import AgnosticDatabase
-from odmantic import ObjectId
+from datetime import datetime
+from pytz import timezone
 
 from core import logger
-from core.apis.schemas.requests.resource_request import ResourceCreate, ResourceUpdate
-from core.cruds.base import CRUDBase
+from core.database.database import session
 from core.models.resource_model import Resource
+from core.utils.custom.database_helper import to_dict
 
 logging = logger(__name__)
 
 
-class CRUDResource(CRUDBase[Resource, ResourceCreate, ResourceUpdate]):
-    def __init__(self):
-        super().__init__(model=Resource)
+class CRUDResource:
+    """Database access layer for resource records."""
 
-    async def get_by_id(self, db: AgnosticDatabase, *, id: str) -> Resource | None:
+    async def create(self, *, obj_in: dict) -> dict:
         """
-        Retrieves a single resource by unique ID.
+        Create a new resource record.
 
         Args:
-            db: Database connection.
-            id: Resource ID as ObjectId string.
+            obj_in: Resource creation data.
 
         Returns:
-            Resource | None: Resource model instance if found, None otherwise.
+            dict: Created resource record.
 
         Raises:
-            Exception: If database query fails.
+            Exception: If the database write fails.
         """
         try:
-            logging.info(f"Executing CRUDResource.get_by_id with id: {id}")
-            if isinstance(id, str):
-                id = ObjectId(id)
+            logging.info("Executing CRUDResource.create")
+            resource_data = dict(obj_in)
+            timestamp = datetime.now(timezone("UTC")).strftime("%Y-%m-%d %H:%M:%S.%f")
+            resource_data.update(
+                {
+                    "created_at": timestamp,
+                    "updated_at": timestamp,
+                }
+            )
 
-            resource = await super().get(db=db, id=id)
+            resource = Resource(**resource_data)
+            with session() as transaction_session:
+                transaction_session.add(resource)
+                transaction_session.commit()
+                transaction_session.refresh(resource)
+
+            return to_dict(resource)
+        except Exception as error:
+            logging.error(f"Error in CRUDResource.create function: {error}")
+            raise error
+
+    async def get_by_id(self, *, id: str) -> dict | None:
+        """
+        Read a resource record by unique ID.
+
+        Args:
+            id: Resource ID.
+
+        Returns:
+            dict | None: Resource record if found, otherwise None.
+
+        Raises:
+            Exception: If the database read fails.
+        """
+        try:
+            logging.info("Executing CRUDResource.get_by_id")
+            with session() as transaction_session:
+                resource = (
+                    transaction_session.query(Resource)
+                    .filter(Resource.id == id)
+                    .first()
+                )
+
             if resource:
-                logging.info(f"Resource found: {resource.id}")
-            else:
-                logging.warning(f"No resource found with id: {id}")
+                return to_dict(resource)
 
-            return resource
+            logging.warning(f"No resource found with id: {id}")
+            return None
         except Exception as error:
             logging.error(f"Error in CRUDResource.get_by_id function: {error}")
             raise error
 
     async def get_by_name(
         self,
-        db: AgnosticDatabase,
         *,
         user_id: str,
         name: str,
-    ) -> Resource | None:
+    ) -> dict | None:
         """
-        Retrieves a resource by owner and name for duplicate checks.
+        Read a resource by owner and name for duplicate checks.
 
         Args:
-            db: Database connection.
             user_id: Owner user ID.
             name: Resource name.
 
         Returns:
-            Resource | None: Resource model instance if found, None otherwise.
+            dict | None: Resource record if found, otherwise None.
+
+        Raises:
+            Exception: If the database read fails.
         """
         try:
-            logging.info(
-                f"Executing CRUDResource.get_by_name with user_id: {user_id}, name: {name}"
-            )
-            return await self.engine.find_one(
-                Resource,
-                (Resource.user_id == ObjectId(user_id)) & (Resource.name == name),
-            )
+            logging.info("Executing CRUDResource.get_by_name")
+            with session() as transaction_session:
+                resource = (
+                    transaction_session.query(Resource)
+                    .filter(Resource.user_id == user_id, Resource.name == name)
+                    .first()
+                )
+
+            return to_dict(resource) if resource else None
         except Exception as error:
             logging.error(f"Error in CRUDResource.get_by_name function: {error}")
             raise error
 
-    async def create(
-        self,
-        db: AgnosticDatabase,
-        *,
-        obj_in: ResourceCreate | dict,
-    ) -> Resource | None:
+    async def update(self, *, id: str, obj_in: dict) -> dict | None:
         """
-        Creates a new resource document.
+        Update a resource record by unique ID.
 
         Args:
-            db: Database connection.
-            obj_in: Resource creation data.
+            id: Resource ID.
+            obj_in: Resource update data.
 
         Returns:
-            Resource | None: Created resource model instance.
+            dict | None: Updated resource record if found, otherwise None.
+
+        Raises:
+            Exception: If the database update fails.
         """
         try:
-            logging.info("Executing CRUDResource.create")
-            resource_data = obj_in if isinstance(obj_in, dict) else obj_in.model_dump()
-            return await self.engine.save(Resource(**resource_data))
+            logging.info("Executing CRUDResource.update")
+            with session() as transaction_session:
+                resource = (
+                    transaction_session.query(Resource)
+                    .filter(Resource.id == id)
+                    .first()
+                )
+                if resource is None:
+                    logging.warning(f"No resource found with id: {id}")
+                    return None
+
+                for field, value in obj_in.items():
+                    setattr(resource, field, value)
+                resource.updated_at = datetime.now(timezone("UTC")).strftime(
+                    "%Y-%m-%d %H:%M:%S.%f"
+                )
+                transaction_session.commit()
+                transaction_session.refresh(resource)
+
+            return to_dict(resource)
         except Exception as error:
-            logging.error(f"Error in CRUDResource.create function: {error}")
+            logging.error(f"Error in CRUDResource.update function: {error}")
             raise error
 ```
 
@@ -409,7 +453,7 @@ class ResourceConnectionService:
             return {
                 "is_valid": False,
                 "metadata": {},
-                "error": str(error),
+                "error": "Provider configuration validation failed",
             }
 ```
 

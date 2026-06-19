@@ -9,7 +9,7 @@ Use this skill to write backend code that follows Eigi conventions. Inspect the 
 
 For detailed folder and file responsibilities, read [references/folder-structure.md](references/folder-structure.md) before adding new backend files or moving code between layers.
 
-For concrete router, controller, CRUD, and service examples based on Vaani Core patterns, read [references/examples.md](references/examples.md) before writing new backend modules.
+For concrete router, controller, CRUD, and service examples, read [references/examples.md](references/examples.md) before writing new backend modules.
 
 ## Core Flow
 
@@ -74,8 +74,9 @@ See [references/examples.md](references/examples.md) for full controller example
 
 CRUD classes should be small persistence wrappers:
 
-- Extend the repo base CRUD class when available.
-- Initialize with the model class.
+- Define the domain CRUD class directly in the resource CRUD file unless the target repo already has a required local base class.
+- Import the model class used by the CRUD operations.
+- Keep database/session wiring inside the CRUD layer when the repo exposes a shared database/session helper; do not add route/controller `db` parameters unless the target repo already requires dependency-injected sessions.
 - Convert string IDs to ObjectId where the repo expects ObjectId storage.
 - Log method entry and persistence failures.
 - Re-raise database errors unless the CRUD method has enough context to return a domain-safe result.
@@ -90,6 +91,10 @@ Services should own provider clients, external calls, background workflows, and 
 - Use enums for constrained status/type values.
 - Keep secret storage hashed or redacted. Return raw secrets only at creation time when the product explicitly requires it.
 - Keep timestamps, defaults, collection names, and storage-only fields in models.
+
+## Repository Hygiene
+
+When creating a backend structure, add or update `.gitignore` even if the repo is not Git-initialized yet. It must exclude environment files, virtualenvs, Python caches, test/build caches, logs, local databases, and editor/OS noise. See [references/folder-structure.md](references/folder-structure.md) for the compact backend template.
 
 ## Testing
 
@@ -116,5 +121,6 @@ Mock databases, provider SDKs, schedulers, cloud clients, and network calls. Fol
 - Add docstrings to every new or modified function and method.
 - Add entry, warning, and error logs in the same format as existing backend code.
 - Preserve meaningful domain `HTTPException`s.
+- Add or update `.gitignore` for env files, virtualenvs, caches, logs, and generated artifacts.
 - Register new routers in the app/API aggregator.
 - Add focused tests and run them, or explain why they could not be run.

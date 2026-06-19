@@ -7,9 +7,36 @@ Every new or modified function and method in these folders must include a docstr
 ## Top-Level Backend Files
 
 - `main.py`: Runtime entrypoint. Load environment variables, expose the ASGI `app`, configure the process logger, and start Uvicorn when executed directly. Keep application wiring in the API app module, not here.
+- `.gitignore`: Required for every backend structure, even before GitHub/Git initialization. Keep secrets, virtualenvs, caches, logs, generated files, and local databases out of source control.
 - `requirements.txt` or equivalent dependency file: Backend runtime dependencies.
 - `Dockerfile`, `run.sh`, scripts: Deployment and local startup helpers. Do not put API logic here.
 - `logs/`: Runtime log output. Application code should write through logger helpers, not manually create ad hoc log files.
+
+Use this compact backend `.gitignore` baseline and extend it only for repo-specific generated files:
+
+```gitignore
+.env
+.env.*
+!.env.example
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+dist/
+build/
+*.egg-info/
+logs/
+*.log
+*.sqlite*
+.DS_Store
+.idea/
+.vscode/
+```
 
 ## `commons/`
 
@@ -98,10 +125,11 @@ Use CRUD classes for persistence operations.
 
 Responsibilities:
 
-- Extend `CRUDBase` or the repo's equivalent base repository when available.
-- Initialize with the model class.
+- Define the domain CRUD class directly in the resource CRUD file unless the target repo already has a required local base class.
+- Import the domain model used by the CRUD operations.
 - Add docstrings to every CRUD method.
 - Implement database-specific queries and updates.
+- Own database/session access when the repo exposes a shared database/session helper from `database.py` or the local equivalent. In that style, routes and controllers should not accept or pass a `db` parameter.
 - Convert string IDs to ObjectId when needed.
 - Log `Executing CRUDClass.method` and persistence errors.
 - Return models, lists, booleans, counts, or persistence-specific results.
@@ -151,7 +179,7 @@ Use database modules for database lifecycle and shared persistence setup.
 Responsibilities:
 
 - Create and expose database clients/engines.
-- Provide FastAPI database dependencies such as `get_database`.
+- Provide shared database clients, engines, or session helpers used by CRUD classes.
 - Connect and close database connections.
 - Initialize default records.
 - Create or verify indexes.
